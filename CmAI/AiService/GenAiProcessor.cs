@@ -5,26 +5,17 @@ using System.Text.Json;
 using Microsoft.Extensions.Options;
 using System.Text.Json.Nodes;
 using System.Text.Json.Schema;
-using Google.Protobuf.WellKnownTypes; // For Struct
+using Google;
+using Google.Apis.Util;
+using Google.Apis.Responses; // Need this for ApiException
+using Google.Protobuf.WellKnownTypes;
+using Microsoft.AspNetCore.Http; // For Struct
 using Type = Google.GenAI.Types.Type; // Used to deserialize the final JSON string
 
 
 namespace CmAI.AiService;
 
-public class GeminiAISettings
-{
-    // This property name must match the key in appsettings.json
-    public string ApiKey { get; set; }
-}
 
-public class CommandOutput
-{
-    public string command { get; set; }
-
-    public bool isSensitive { get; set; }
-
-    public string conclusion { get; set; }
-}
 
 public class GenAiProcessor
 {
@@ -37,33 +28,20 @@ public class GenAiProcessor
         _logger = logger;
     }
 
-    public async Task<string> GetCommand(string userQuery, string osType)
+    public async Task<CommandOutput> GetCommand(string userQuery, string osType)
     {
-        try
-        {
-            var result = await GetStructuredCommand(userQuery, osType);
-            Console.WriteLine(result.command);
-            Console.WriteLine(result.isSensitive);
-            Console.WriteLine(result.conclusion);
-        }
-        catch (Exception e)
-        {
-            Console.WriteLine(e);
-            throw;
-        }
-
-        return "";
+        return await GetStructuredCommand(userQuery, osType);
     }
 
 
-    public async Task<CommandOutput> GetStructuredCommand(string userInput, string osType)
+    private async Task<CommandOutput> GetStructuredCommand(string userInput, string osType)
     {
-        // Use the strict system prompt defined above
-        // The System Prompt you pass to GenerateContentConfig
+        _logger.LogDebug("Entering GetStructuredCommand ");
+        try
+        {
+            var client = new Client(apiKey: _settings.ApiKey);
 
-        var client = new Client(apiKey: _settings.ApiKey);
-
-        string systemPrompt = $@"
+            string systemPrompt = $@"
 You are an expert command-line executor for a {osType} system.
 Your only function is to analyze the user's intent and populate the REQUIRED JSON schema.
 
@@ -73,48 +51,67 @@ RULES:
 3. 'conclusion': Must be a concise, one-sentence summary of the action and include a clear warning if 'isSensitive' is true.
 ";
 
-        var config = new GenerateContentConfig
-        {
-            SystemInstruction = new Content
+            var config = new GenerateContentConfig
             {
-                Parts = new List<Part>
-                {
-                    new() { Text = systemPrompt }
-                }
-            },
-            CandidateCount = 1,
-            Temperature = 0.1f,
-            ResponseMimeType = "application/json",
-            ResponseSchema = new Schema
-            {
-                Type = Type.OBJECT,
-                Properties = new Dictionary<string, Schema>
-                {
-                    { "command", new Schema { Type = Type.STRING } },
-                    { "isSensitive", new Schema { Type = Type.BOOLEAN } },
-                    { "conclusion", new Schema { Type = Type.STRING } }
-                },
-            }
-        };
-
-
-        var response = await client.Models.GenerateContentAsync(
-            model: "gemini-2.5-flash",
-            contents:
-            [
-                new Content
+                SystemInstruction = new Content
                 {
                     Parts = new List<Part>
                     {
-                        new() { Text = userInput }
+                        new() { Text = systemPrompt }
                     }
+                },
+                CandidateCount = 1,
+                Temperature = 0.1f,
+                ResponseMimeType = "application/json",
+                ResponseSchema = new Schema
+                {
+                    Type = Type.OBJECT,
+                    Properties = new Dictionary<string, Schema>
+                    {
+                        { "command", new Schema { Type = Type.STRING } },
+                        { "isSensitive", new Schema { Type = Type.BOOLEAN } },
+                        { "conclusion", new Schema { Type = Type.STRING } }
+                    },
                 }
-            ],
-            config: config
-        );
+            };
 
-        // Deserialize the guaranteed valid JSON string into your C# object
-        var output = JsonSerializer.Deserialize<CommandOutput>(response.Candidates[0].Content.Parts[0].Text);
-        return output;
+
+            var response = await client.Models.GenerateContentAsync(
+                model: "gemini-2.5-flash",
+                contents:
+                [
+                    new Content
+                    {
+                        Parts = new List<Part>
+                        {
+                            new() { Text = userInput }
+                        }
+                    }
+                ],
+                config: config
+            );
+
+            response.ThrowIfNull("Null response received from AI");
+
+            // Deserialize the guaranteed valid JSON string into your C# object
+            var output = JsonSerializer.Deserialize<CommandOutput>(response.Candidates[0].Content.Parts[0].Text);
+
+            return output;
+        }
+        catch (GoogleApiException e)
+        {
+            _logger.LogError("Error [GetStructuredCommand] - GoogleApiException: {e}", e);
+            throw;
+        }
+        catch (HttpRequestException e)
+        {
+            _logger.LogError("Error [GetStructuredCommand] - HttpRequestException: {e}", e);
+            throw;
+        }
+        catch (Exception e)
+        {
+            _logger.LogError("Error [GetStructuredCommand] - Exception: {e}", e);
+            throw;
+        }
     }
 }

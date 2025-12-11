@@ -3,6 +3,7 @@ using CmAI.CmAIExecutor;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Serilog;
 
 // 1. Set up Configuration
@@ -15,7 +16,7 @@ var configuration = new ConfigurationBuilder()
 Log.Logger = new LoggerConfiguration()
     .ReadFrom.Configuration(configuration)
     .Enrich.FromLogContext()
-    .WriteTo.Console() // Still useful for real-time viewing
+    // .WriteTo.Console() // Still useful for real-time viewing
     .CreateLogger();
 
 
@@ -23,6 +24,7 @@ try
 {
     // 3. Create the Generic Host
     var host = Host.CreateDefaultBuilder(args)
+        .ConfigureLogging(logging => { logging.ClearProviders(); })
         .UseSerilog() // Use Serilog instead of the default logger
         .ConfigureServices((hostContext, services) =>
         {

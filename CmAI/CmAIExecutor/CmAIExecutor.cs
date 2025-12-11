@@ -1,4 +1,3 @@
-using Google.Apis.Util;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using CmAI.AiService;
@@ -35,6 +34,7 @@ public class CmAiExecutor : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        _logger.LogDebug("Entering ExecuteAsync");
         _logger.LogInformation("CmAI executor started");
 
         while (!stoppingToken.IsCancellationRequested)
@@ -44,32 +44,71 @@ public class CmAiExecutor : BackgroundService
                 Console.WriteLine($"Insert task: ");
                 string? userInput = Console.ReadLine()?.Trim();
 
+                if (string.IsNullOrEmpty(userInput))
+                {
+                    _logger.LogInformation("Empty user input");
+                    continue;
+                }
+
                 if (_exitCommands.Contains(userInput.ToLower()))
+                {
+                    _logger.LogInformation("Shutdown requested by user.");
+                    Console.WriteLine("Shutdown requested by user.");
+                    break;
+                }
+
+
+                _logger.LogInformation("Processing user request: {userInput}", userInput);
+
+                var commandOutput = await _aiService.GetCommand(userInput, GetCurrentOs());
+
+                _logger.LogInformation("AI response: \n Com: {Command} \n Con: {conclusion} \n isSen: {isSensitive}",
+                    commandOutput.command,
+                    commandOutput.conclusion, commandOutput.isSensitive);
+
+                // Console.WriteLine($"Command: {commandOutput.command}");
+                // Console.WriteLine($"Explanation: {commandOutput.conclusion}");
+
+                if (GetConfirmation(commandOutput.isSensitive))
+                {
+                    _logger.LogInformation("This command is now executing.");
+                }
+                else
                 {
                     _logger.LogInformation("Shutdown requested by user.");
                     break;
                 }
-
-                if (string.IsNullOrEmpty(userInput))
-                {
-                    Console.WriteLine("Empty user input");
-                    continue;
-                }
-
-                _logger.LogInformation($"Executing command: {userInput}");
-
-                _aiService.GetCommand(userInput, GetCurrentOS());
             }
             catch (Exception e)
             {
-                Console.WriteLine(e.Message);
-                _logger.LogError(e.Message, e);
+                _logger.LogError("Error occured: {e}", e);
+                throw;
             }
         }
 
         await StopHostGracefully(stoppingToken);
     }
 
+    /// <summary>
+    /// Get confirmation from user.
+    /// </summary>
+    /// <param name="isSensitive"></param>
+    /// <returns></returns>
+    private bool GetConfirmation(bool isSensitive)
+    {
+        _logger.LogDebug("Entering GetConfirmation");
+        if (isSensitive)
+            Console.Write($"It is a sensitive command, please make sure that you know what you are doing.");
+
+
+        _logger.LogInformation("Do you want to proceed? Press: y/n");
+
+        string? userInput = Console.ReadLine()?.Trim();
+
+        _logger.LogInformation("User response: {userInput}", userInput);
+
+        return userInput == "y" || userInput == "Y";
+    }
 
     /// <summary>
     /// Helper method to signal the host to stop
@@ -88,7 +127,7 @@ public class CmAiExecutor : BackgroundService
         await Task.CompletedTask;
     }
 
-    private string GetCurrentOS() =>
+    private string GetCurrentOs() =>
         System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(
             System.Runtime.InteropServices.OSPlatform.Windows)
             ? "Windows"
