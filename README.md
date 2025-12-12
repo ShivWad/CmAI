@@ -20,7 +20,7 @@ Designed for developers and power users, CmAI prioritizes safety by analyzing th
 
 ## 🛠️ Technology Stack
 
-  * **.NET 8.0** (Generic Host)
+  * **.NET 10.0** (Generic Host)
   * **Google.GenAI SDK** (Gemini 2.5 Flash Model)
   * **CommandLineParser** (Argument parsing)
   * **Serilog** (Structured file & console logging)
@@ -33,7 +33,7 @@ Designed for developers and power users, CmAI prioritizes safety by analyzing th
 ### 1\. Prerequisites
 
   * A **Google Gemini API Key** (Get one from [Google AI Studio](https://aistudio.google.com/)).
-  * **.NET 8 SDK** (Only required to build; not required to run the published executable).
+  * **.NET 10 SDK** (Only required to build; not required to run the published executable).
 
 ### 2\. Build for Production
 
@@ -52,7 +52,7 @@ dotnet publish -c Release --self-contained true -r osx-x64
 
 ### 3\. Deployment
 
-1.  Navigate to the publish folder (e.g., `bin\Release\net8.0\win-x64\publish\`).
+1.  Navigate to the publish folder (e.g., `bin\Release\net10.0\win-x64\publish\`).
 2.  Copy all files to a permanent location (e.g., `C:\Tools\CmAI`).
 3.  **Add this location to your System PATH** environment variable so you can run `cmai` from anywhere.
 
