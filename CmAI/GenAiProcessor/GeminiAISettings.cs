@@ -1,4 +1,4 @@
-﻿namespace CmAI.AiService;
+﻿namespace CmAI.GenAiProcessor;
 
 public class GeminiAISettings
 {

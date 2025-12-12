@@ -1,13 +1,15 @@
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using CmAI.AiService;
+using CmAI.GenAiProcessor;
+using CmAI.CommandExecutor;
+
 
 namespace CmAI.CmAIExecutor;
 
-public class CmAiExecutor : BackgroundService
+public class CmAiExecutor : ICliOperation
 {
     private readonly ILogger<CmAiExecutor> _logger;
-    private readonly GenAiProcessor _aiService;
+    private readonly AiService _aiService;
+    private readonly CommandExecutorService _commandExecutorService;
 
     private readonly List<string> _exitCommands =
     [
@@ -26,67 +28,68 @@ public class CmAiExecutor : BackgroundService
         "withdraw"
     ];
 
-    public CmAiExecutor(ILogger<CmAiExecutor> logger, GenAiProcessor aiService)
+    public CmAiExecutor(ILogger<CmAiExecutor> logger, AiService aiService,
+        CommandExecutorService commandExecutorService)
     {
         _logger = logger;
         _aiService = aiService;
+        _commandExecutorService = commandExecutorService;
     }
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    public async Task ExecuteAsync(CliOptions.CliOptions options, CancellationToken cancellationToken)
     {
         _logger.LogDebug("Entering ExecuteAsync");
         _logger.LogInformation("CmAI executor started");
 
-        while (!stoppingToken.IsCancellationRequested)
+        cancellationToken.ThrowIfCancellationRequested();
+        try
         {
-            try
+            var osType = GetCurrentOs();
+            string userInput = options.query;
+
+            if (string.IsNullOrEmpty(userInput))
             {
-                Console.WriteLine($"Insert task: ");
-                string? userInput = Console.ReadLine()?.Trim();
-
-                if (string.IsNullOrEmpty(userInput))
-                {
-                    _logger.LogInformation("Empty user input");
-                    continue;
-                }
-
-                if (_exitCommands.Contains(userInput.ToLower()))
-                {
-                    _logger.LogInformation("Shutdown requested by user.");
-                    Console.WriteLine("Shutdown requested by user.");
-                    break;
-                }
-
-
-                _logger.LogInformation("Processing user request: {userInput}", userInput);
-
-                var commandOutput = await _aiService.GetCommand(userInput, GetCurrentOs());
-
-                _logger.LogInformation("AI response: \n Com: {Command} \n Con: {conclusion} \n isSen: {isSensitive}",
-                    commandOutput.command,
-                    commandOutput.conclusion, commandOutput.isSensitive);
-
-                // Console.WriteLine($"Command: {commandOutput.command}");
-                // Console.WriteLine($"Explanation: {commandOutput.conclusion}");
-
-                if (GetConfirmation(commandOutput.isSensitive))
-                {
-                    _logger.LogInformation("This command is now executing.");
-                }
-                else
-                {
-                    _logger.LogInformation("Shutdown requested by user.");
-                    break;
-                }
+                _logger.LogInformation("Empty user input");
+                return;
             }
-            catch (Exception e)
+
+            if (_exitCommands.Contains(userInput.ToLower()))
             {
-                _logger.LogError("Error occured: {e}", e);
-                throw;
+                _logger.LogInformation("Shutdown requested by user.");
+                Console.WriteLine("Shutdown requested by user.");
+            }
+
+
+            _logger.LogInformation("Processing user request: {userInput}", userInput);
+
+            var commandOutput = await _aiService.GetCommand(userInput, osType, cancellationToken);
+
+            _logger.LogInformation("AI response: \n Com: {Command} \n Con: {conclusion}",
+                commandOutput.command,
+                commandOutput.conclusion);
+
+            _logger.LogDebug("isSen: {isSensitive}", commandOutput.isSensitive);
+
+            if (GetConfirmation(commandOutput.isSensitive))
+            {
+                _logger.LogInformation("This command is now executing.");
+                ////
+                var isDone = await _commandExecutorService.ExecuteCommand(commandOutput.command, osType, commandOutput.isSensitive, cancellationToken);
+                ////
+            }
+            else
+            {
+                _logger.LogInformation("Shutdown requested by user.");
             }
         }
+        catch (Exception e)
+        {
+            _logger.LogError("Error occured: {e}", e);
+            throw;
+        }
 
-        await StopHostGracefully(stoppingToken);
+
+        await StopHostGracefully(cancellationToken);
     }
 
     /// <summary>
@@ -105,7 +108,7 @@ public class CmAiExecutor : BackgroundService
 
         string? userInput = Console.ReadLine()?.Trim();
 
-        _logger.LogInformation("User response: {userInput}", userInput);
+        _logger.LogDebug("User response: {userInput}", userInput);
 
         return userInput == "y" || userInput == "Y";
     }
@@ -113,10 +116,10 @@ public class CmAiExecutor : BackgroundService
     /// <summary>
     /// Helper method to signal the host to stop
     /// </summary>
-    /// <param name="stoppingToken"></param>
-    private async Task StopHostGracefully(CancellationToken stoppingToken)
+    /// <param name="cancellationToken"></param>
+    private async Task StopHostGracefully(CancellationToken cancellationToken)
     {
-        if (stoppingToken.CanBeCanceled)
+        if (cancellationToken.CanBeCanceled)
         {
             // Inject IHostApplicationLifetime in the constructor if you want to use this pattern
             // For a simple console app, just exiting the loop often suffices, 
