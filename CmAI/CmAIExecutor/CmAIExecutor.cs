@@ -65,11 +65,20 @@ public class CmAiExecutor : ICliOperation
 
             var commandOutput = await _aiService.GetCommand(userInput, osType, cancellationToken);
 
-            _logger.LogInformation("AI response: \n Com: {Command} \n Con: {conclusion}",
+
+            if (isOutputInValid(commandOutput.command))
+            {
+                _logger.LogInformation("Command generated is either null or empty");
+                _logger.LogInformation("LLM explanation: {conclusion}", commandOutput.conclusion);
+                return;
+            }
+
+            _logger.LogInformation("AI response: \n Command: {Command} \n Explanation: {conclusion}",
                 commandOutput.command,
                 commandOutput.conclusion);
 
-            _logger.LogDebug("isSen: {isSensitive}", commandOutput.isSensitive);
+
+            _logger.LogDebug("isSensitive: {isSensitive}", commandOutput.isSensitive);
 
             if (GetConfirmation(commandOutput.isSensitive))
             {
@@ -110,7 +119,7 @@ public class CmAiExecutor : ICliOperation
 
         _logger.LogDebug("User response: {userInput}", userInput);
 
-        return userInput == "y" || userInput == "Y";
+        return userInput.ToLower() == "y";
     }
 
     /// <summary>
@@ -129,4 +138,20 @@ public class CmAiExecutor : ICliOperation
             System.Runtime.InteropServices.OSPlatform.Windows)
             ? "Windows"
             : "Linux/macOS";
+
+    /// <summary>
+    /// Checks if command is empty or null
+    /// Can be updated for better checks. 
+    /// </summary>
+    /// <param name="command"></param>
+    /// <returns></returns>
+    private bool isOutputInValid(string command)
+    {
+        if (string.IsNullOrWhiteSpace(command))
+        {
+            return true;
+        }
+
+        return false;
+    }
 }

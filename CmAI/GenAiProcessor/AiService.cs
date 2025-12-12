@@ -141,7 +141,8 @@ public class AiService
         }
         catch (HttpRequestException e)
         {
-            _logger.LogError("Error [GetStructuredCommand] - HttpRequestException: {e}", e);
+            _logger.LogError("Error-: {e}", e.Message);
+            _logger.LogDebug("Error [GetStructuredCommand] - HttpRequestException: {e}", e);
             throw;
         }
         catch (Exception e)
