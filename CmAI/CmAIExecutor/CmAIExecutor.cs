@@ -11,6 +11,8 @@ public class CmAiExecutor : ICliOperation
     private readonly AiService _aiService;
     private readonly CommandExecutorService _commandExecutorService;
 
+
+    //Can be a better way to make this list.
     private readonly List<string> _exitCommands =
     [
         "quit",
@@ -56,9 +58,8 @@ public class CmAiExecutor : ICliOperation
             if (_exitCommands.Contains(userInput.ToLower()))
             {
                 _logger.LogInformation("Shutdown requested by user.");
-                Console.WriteLine("Shutdown requested by user.");
+                return;
             }
-
 
             _logger.LogInformation("Processing user request: {userInput}", userInput);
 
@@ -73,9 +74,8 @@ public class CmAiExecutor : ICliOperation
             if (GetConfirmation(commandOutput.isSensitive))
             {
                 _logger.LogInformation("This command is now executing.");
-                ////
-                var isDone = await _commandExecutorService.ExecuteCommand(commandOutput.command, osType, commandOutput.isSensitive, cancellationToken);
-                ////
+                await _commandExecutorService.ExecuteCommand(commandOutput.command, osType, commandOutput.isSensitive,
+                    cancellationToken);
             }
             else
             {
@@ -119,13 +119,7 @@ public class CmAiExecutor : ICliOperation
     /// <param name="cancellationToken"></param>
     private async Task StopHostGracefully(CancellationToken cancellationToken)
     {
-        if (cancellationToken.CanBeCanceled)
-        {
-            // Inject IHostApplicationLifetime in the constructor if you want to use this pattern
-            // For a simple console app, just exiting the loop often suffices, 
-            // but this is the formal way to stop the host.
-        }
-
+        cancellationToken.ThrowIfCancellationRequested();
         _logger.LogInformation("CmAI executor stopped");
         await Task.CompletedTask;
     }

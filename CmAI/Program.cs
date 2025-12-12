@@ -28,7 +28,6 @@ Log.Logger = new LoggerConfiguration()
 using var cts = new CancellationTokenSource();
 CancellationToken cancellationToken = cts.Token;
 
-// Optional: Hook into Ctrl+C event for graceful shutdown
 Console.CancelKeyPress += (sender, eventArgs) =>
 {
     Log.Warning("Cancellation signal (Ctrl+C) received. Shutting down gracefully...");
@@ -56,10 +55,7 @@ try
         with.HelpWriter = Console.Out;
     });
     var parserResult = parser.ParseArguments<CliOptions>(args);
-    await parserResult.WithParsedAsync(async options =>
-    {
-        await RunOperationAsync(host.Services, options, cancellationToken);
-    });
+    await parserResult.WithParsedAsync(async options => { await RunOperationAsync(host.Services, options); });
 
     //handle parsing error
     await parserResult.WithNotParsedAsync(async errors =>
@@ -68,7 +64,7 @@ try
         {
             logger.LogError(
                 "Parsing Error: Did you forget to wrap your query in quotes? Example: -q \"Your Query Here\"");
-            logger.LogDebug("Detailed parsing failures: {Erroros}", errors.Select(e => e.ToString()));
+            logger.LogDebug("Detailed parsing failures: {Errors}", errors.Select(e => e.ToString()));
             Environment.ExitCode = 1;
         }
 
@@ -98,8 +94,9 @@ static IHostBuilder CreateHostBuilder(string[] args) =>
             services.AddScoped<CommandExecutorService>();
         });
 
-async Task RunOperationAsync(IServiceProvider serviceProvider, CliOptions options, CancellationToken cancellationToken)
+async Task RunOperationAsync(IServiceProvider serviceProvider, CliOptions options)
 {
+    cancellationToken.ThrowIfCancellationRequested();
     var logger = serviceProvider.GetService<ILogger<Program>>();
     var cmAiExecutor = serviceProvider.GetService<CmAiExecutor>();
     logger.LogDebug("[RunOperationAsync]");
