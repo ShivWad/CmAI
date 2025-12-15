@@ -87,7 +87,7 @@ The application uses a simple flag syntax.
 | Flag | Alias | Description | Required? |
 | :--- | :--- | :--- | :--- |
 | `--query` | `-q` | The natural language instruction. **Must be wrapped in double quotes.** | ✅ Yes |
-| `--help` | `-h` | Shows the help screen. | ❌ No |
+| `--help` | `` | Shows the help screen. | ❌ No |
 
 ### Examples
 
